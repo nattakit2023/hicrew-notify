@@ -1,0 +1,18 @@
+
+!.env.example
+# เก็บไว้เป็นตัวอย่างเท่านั้น
+# ไฟล์ที่มีข้อมูลลับ/ไฟล์ชั่วคราว — ไม่ควรเข้า git
+*.log
+.env
+.env.local
+.quota-alert.lock
+node_modules/
+npm-debug.log*
+state.json
+state.json.tmp
+token-store.json
+token-store.json.tmp
+# เพิ่มเติม
+token-store-temp.json
+*.tmp
+data/

@@ -1,0 +1,21 @@
+{
+  "name": "quota-alert",
+  "version": "1.0.0",
+  "private": true,
+  "description": "แจ้งเตือนโควตาข้อมูล PIN เข้า LINE ทุกชั่วโมง (อ่านข้อมูลผ่าน report API)",
+  "main": "quota-alert-line.js",
+  "scripts": {
+    "start": "node quota-alert-line.js",
+    "check": "node quota-alert-line.js --check",
+    "dry": "DRY_RUN=1 node quota-alert-line.js",
+    "selftest": "node quota-alert-line.js --selftest",
+    "preview": "node quota-alert-line.js --preview",
+    "test-line": "node quota-alert-line.js --test-line",
+    "whoami": "node quota-alert-line.js --whoami",
+    "register-report": "node quota-alert-line.js --register-report"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}

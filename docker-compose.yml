@@ -1,0 +1,14 @@
+services:
+  quota-alert:
+    build: .
+    container_name: quota-alert
+    restart: unless-stopped         # ตาย/รีบูตเครื่อง -> ขึ้นเอง
+    env_file: .env
+    environment:
+      STATE_FILE: /app/data/state.json
+      REFRESH_TOKEN_FILE: /app/data/token-store.json
+    volumes:
+      - ./data:/app/data            # state + token + log อยู่ในนี้ (ต้อง persist)
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }

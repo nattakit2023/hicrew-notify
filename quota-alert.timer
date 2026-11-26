@@ -1,0 +1,12 @@
+[Unit]
+Description=quota-alert ทุก 1 ชั่วโมง (24/7)
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=30s
+# ถ้าเครื่องปิด/หลับตอนถึงเวลา -> รันชดเชยเมื่อกลับมา
+Persistent=true
+Unit=quota-alert.service
+
+[Install]
+WantedBy=timers.target

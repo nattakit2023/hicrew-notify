@@ -1,0 +1,21 @@
+# ── ห้ามเข้า image ──
+.env
+.env.*
+!.env.example
+token-store*.json
+state.json
+data/
+node_modules/
+*.log
+.DS_Store
+quota-alert-flow.pdf
+
+# ── เอกสาร/ตัวติดตั้งของ host (ไม่ต้องอยู่ใน image) ──
+README.md
+Dockerfile
+docker-compose.yml
+.gitlab-ci.yml
+install-task.ps1
+run-quota-alert.cmd
+quota-alert.service
+quota-alert.timer

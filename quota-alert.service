@@ -1,0 +1,24 @@
+[Unit]
+Description=quota-alert — แจ้งเตือนโควตาข้อมูล PIN เข้า LINE
+Documentation=file:///opt/quota-alert/README.md
+# ต้องมี network ก่อน ถ้าอยากให้รอ network จริงให้เปิด:
+# After=network-online.target
+# Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=quotaalert
+Group=quotaalert
+WorkingDirectory=/opt/quota-alert
+ExecStart=/usr/bin/node /opt/quota-alert/quota-alert-line.js
+# สคริปต์โหลด .env เอง แต่ถ้าอยาก override บางค่าให้ใช้ Environment= ทับ
+# Environment=NEAR_PCT=70
+TimeoutStartSec=10min
+Nice=10
+
+# ความปลอดภัยเพิ่มเติม (ไฟล์ token อยู่ที่ WorkingDirectory)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/quota-alert

@@ -1,0 +1,20 @@
+# ── บังคับ line ending ให้ถูกกับปลายทาง ──
+* text=auto eol=lf
+
+# ไฟล์ที่ต้องเป็น LF เท่านั้น (container/Linux รันไม่ได้ถ้าเป็น CRLF)
+*.sh         text eol=lf
+Dockerfile   text eol=lf
+*.sql        text eol=lf
+*.js         text eol=lf
+*.json       text eol=lf
+*.yml        text eol=lf
+*.md         text eol=lf
+.env.example text eol=lf
+
+# ไฟล์ที่ต้องเป็น CRLF (Windows)
+*.cmd        text eol=crlf
+*.ps1        text eol=crlf
+
+# ไบนารี
+*.pdf        binary
+*.png        binary
