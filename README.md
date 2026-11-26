@@ -378,10 +378,39 @@ chmod 600 .env.prod
 > `.env.prod` ถูก ignore แล้ว · `STATE_FILE` แยกไฟล์ → dedupe ของ prod ไม่ปนกับ staging
 
 ### 2) ลงทะเบียน report ใน Prod DB (ครั้งเดียว)
+
+เลือกวิธีที่สะดวก — **ต้องเป็น DB ตัวเดียวกับที่ Prod API ใช้**
+
+**① บนเครื่อง Prod (ไม่ต้องมี psql ในเครื่องตัวเอง)**
+```bash
+ssh user@prod-server
+cd /opt/quota-alert
+DATABASE_URL='postgres://user:pass@db-host:5432/dbname' \
+  docker compose run --rm --entrypoint node quota-alert /app/quota-alert-line.js --register-report
+```
+
+**② ผ่าน pgAdmin / DBeaver**
+เปิด `register-report.sql` → คัดลอกทั้งไฟล์ → วางใน Query Tool → Execute
+
+**③ ผ่าน psql (bastion/host ที่ต่อ DB ได้)**
 ```bash
 psql "$PROD_DATABASE_URL" -f register-report.sql
-# หรือ: ENV_FILE=.env.prod DATABASE_URL=... node quota-alert-line.js --register-report
+psql "$PROD_DATABASE_URL" -f register-report.verify.sql      # ตรวจผล
 ```
+
+ผลที่ต้องเห็นจาก `verify.sql`:
+```
+name              | quota_alert.pins
+version           | 1
+is_active         | t
+has_remark        | t
+has_is_primary    | t
+```
+
+ถ้าต้องการถอน: `psql "$PROD_DATABASE_URL" -f register-report.rollback.sql`
+
+> สิทธิ์ที่ต้องใช้: `INSERT/UPDATE` บนตาราง `report_query` (ครั้งเดียว) — ถ้า user เป็น read-only ต้องขอ DBA
+> หลังลงทะเบียนแล้ว สคริปต์อ่านผ่าน API อย่างเดียว ไม่ต้องใช้ DB อีก
 
 ### 3) ทดสอบแบบไม่ส่งอะไร
 ```bash
