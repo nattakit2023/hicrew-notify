@@ -22,6 +22,7 @@
 
 SELECT pc.code                                            AS pin_code,
        pc.status                                          AS pin_status,
+       pc.remark                                          AS remark,
        s.vessel_id,
        v.vessel_name,
        qn.quota_bytes,

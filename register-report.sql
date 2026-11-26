@@ -23,6 +23,7 @@ VALUES (
            'PIN ที่ยังใช้งานได้ (ไม่รวม revoked/หมดอายุ) พร้อมโควตาปัจจุบัน: quota_bytes, used_bytes, remaining_bytes, used_pct และวันหมดอายุ ใช้สำหรับแจ้งเตือนทาง LINE เมื่อใช้เกินเกณฑ์ 70%/100% (การใช้งานของ MAC นับรวมเป็นของ PIN เจ้าของแล้ว)',
            $sql$SELECT pc.code                                            AS pin_code,
        pc.status                                          AS pin_status,
+       pc.remark                                          AS remark,
        s.vessel_id,
        v.vessel_name,
        qn.quota_bytes,

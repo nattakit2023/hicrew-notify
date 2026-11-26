@@ -506,14 +506,27 @@ function vesselLabel(row) {
   return 'ไม่ระบุเรือ';
 }
 
-/** บรรทัดของ PIN หนึ่งรายการ (มี indent ให้อยู่ใต้หัวข้อเรือ) */
+/** หมายเหตุย่อ: ตัดที่ 40 ตัวอักษร (กันข้อความบวม) */
+function remarkOf(row) {
+  const raw = row.remark ? String(row.remark).trim().replace(/\s+/g, ' ') : '';
+  if (!raw) return '';
+  return raw.length > 40 ? `${raw.slice(0, 39)}…` : raw;
+}
+
+/**
+ * บรรทัดของ PIN หนึ่งรายการ (มี indent อยู่ใต้หัวข้อเรือ)
+ * รูปแบบ: <สี> <PIN> · <remark> · <used>/<quota> GB (<pct>)
+ * สีบอกระดับ (🔴 หมดแล้ว / 🟠 ใกล้หมด) — ไม่ต้องมีคำกำกับหน้า PIN
+ */
 function lineFor(entry) {
   const { row, level } = entry;
   const icon = level === 'full' ? '🔴' : '🟠';
-  const tag = level === 'full' ? 'หมดแล้ว' : 'ใกล้หมด';
   const p = pct(row);
   const pctText = p === null ? '-' : `${p.toFixed(1)}%`;
-  return `  ${icon} ${tag} ${row.pin_code} · ${gb(row.used_bytes)}/${gb(row.quota_bytes)} GB (${pctText})`;
+  const remark = remarkOf(row);
+  const parts = [String(row.pin_code), remark, `${gb(row.used_bytes)}/${gb(row.quota_bytes)} GB (${pctText})`]
+    .filter(Boolean);
+  return `  ${icon} ${parts.join(' · ')}`;
 }
 
 function buildMessage(transitions, now = new Date()) {
@@ -760,8 +773,9 @@ function selftest() {
   const msg = buildMessage(plan(rows, { version: 1, pins: {} }).transitions, new Date('2026-11-24T07:00:00Z'));
   assert.ok(msg.includes('🚢 MANDARIN QUEEN 9 (🟠 1)'), 'ต้องมีหัวข้อย่อยของเรือ (ใกล้หมด)');
   assert.ok(msg.includes('🚢 ไม่ระบุเรือ (🔴 1)'), 'PIN ที่ไม่มีชื่อเรือต้องไปอยู่กลุ่ม "ไม่ระบุเรือ"');
-  assert.ok(msg.includes('🔴 หมดแล้ว P2'), 'ต้องมีบรรทัดหมดแล้ว');
-  assert.ok(msg.includes('🟠 ใกล้หมด P1 · 7.50/10.00 GB (75.0%)'), 'ต้องมีตัวเลขถูกต้อง');
+  assert.ok(msg.includes('🔴 P2 · 10.00/10.00 GB (100.0%)'), 'บรรทัด 🔴 ต้องไม่มีคำกำกับหน้า PIN');
+  assert.ok(msg.includes('🟠 P1 · 7.50/10.00 GB (75.0%)'), 'บรรทัด 🟠 ต้องมีตัวเลขถูกต้อง');
+  assert.ok(!msg.includes('หมดแล้ว P') && !msg.includes('ใกล้หมด P'), 'ต้องไม่แสดงคำ หมดแล้ว/ใกล้หมด หน้า PIN');
   assert.ok(msg.includes('รวม 🔴 หมดแล้ว 1 · 🟠 ใกล้หมด 1 รายการ'), 'ต้องมีบรรทัดรวมท้ายข้อความ');
 
   // เรือที่มี "หมดแล้ว" ต้องขึ้นก่อนเรือที่มีแค่ "ใกล้หมด"
@@ -784,9 +798,9 @@ function selftest() {
 
 function preview() {
   const rows = [
-    { pin_code: 'PIN-000123', quota_bytes: 10e9, used_bytes: 10e9, vessel_name: 'MANDARIN QUEEN 9' },
-    { pin_code: 'PIN-000789', quota_bytes: 10e9, used_bytes: 9.62e9, vessel_name: 'MANDARIN QUEEN 9' },
-    { pin_code: 'PIN-000456', quota_bytes: 5e9, used_bytes: 7.1e9, vessel_name: 'SIRIUS STAR' },
+    { pin_code: 'PIN-000123', quota_bytes: 10e9, used_bytes: 10e9, vessel_name: 'MANDARIN QUEEN 9', remark: 'ลูกเรือ กะดึก' },
+    { pin_code: 'PIN-000789', quota_bytes: 10e9, used_bytes: 9.62e9, vessel_name: 'MANDARIN QUEEN 9', remark: null },
+    { pin_code: 'PIN-000456', quota_bytes: 5e9, used_bytes: 7.1e9, vessel_name: 'SIRIUS STAR', remark: 'ทดสอบ remark ที่ยาวมากจนเกินสี่สิบตัวอักษรจะถูกตัดด้วยปีกกา' },
     { pin_code: 'PIN-000999', quota_bytes: 10e9, used_bytes: 8.4e9, vessel_id: 42 },
     { pin_code: 'PIN-001111', quota_bytes: 10e9, used_bytes: 1.2e9, vessel_name: 'MANDARIN QUEEN 9' },
   ];
