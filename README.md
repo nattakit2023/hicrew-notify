@@ -273,7 +273,7 @@ node quota-alert-line.js --token-info     # ดู iss / client_id / exp ขอ�
 
 ---
 
-## Deploy ด้วย GitLab (แผน B) — repo + build บน server
+## Deploy ด้วย GitHub (แผน B) — repo + build บน server
 
 ### ครั้งแรก: สร้าง repo private
 
@@ -283,7 +283,7 @@ git init -b main
 git add -A
 git status --short           # ต้องไม่เห็น .env / token-store.json / state.json / node_modules
 git commit -m "feat: hourly PIN quota alert to LINE"
-git remote add origin https://gitlab.com/pnart-wednesday/notify-line.git
+git remote add origin https://github.com/<your-org>/notify-line.git
 git tag -a v1.0.0 -m "v1.0.0 — initial"
 git push -u origin main --tags
 ```
@@ -293,9 +293,44 @@ git push -u origin main --tags
 git check-ignore -v .env token-store.json state.json node_modules
 ```
 
+### ถ้า repo อยู่บน GitHub (กรณีใช้ GitLab ไม่ได้)
+
+```bash
+# เปลี่ยน remote จาก GitLab -> GitHub
+git remote set-url origin https://github.com/<your-org>/notify-line.git
+
+# push (ครั้งแรกต้องมีสิทธิ์สร้าง repo หรือให้ org สร้างให้)
+git push -u origin main
+git push origin v1.0.0
+```
+
+**clone บน server แบบ private repo** — ใช้ deploy key (read-only) ปลอดภัยกว่า PAT:
+
+```bash
+# บน server
+ssh-keygen -t ed25519 -C "quota-alert deploy" -f ~/.ssh/quota_alert_deploy -N ""
+cat ~/.ssh/quota_alert_deploy.pub
+# เอา public key ไปใส่: GitHub repo -> Settings -> Deploy keys -> Add (ไม่ต้องติ๊ก write)
+```
+
+`~/.ssh/config` บน server:
+```
+Host github.com-quota-alert
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/quota_alert_deploy
+  IdentitiesOnly yes
+```
+
+```bash
+git clone git@github.com-quota-alert:<your-org>/notify-line.git /opt/quota-alert
+```
+
+> GitHub Actions: ไฟล์ `.github/workflows/ci.yml` จะรัน `--selftest` ให้อัตโนมัติทุก push (ไม่ต้องตั้ง secret ใด ๆ)
+
 ### ครั้งแรก: บน server
 ```bash
-git clone https://gitlab.com/pnart-wednesday/notify-line.git /opt/quota-alert
+git clone https://github.com/<your-org>/notify-line.git /opt/quota-alert
 cd /opt/quota-alert
 cp .env.example .env && vi .env         # API_BASE_URL / LOGTO_* / LINE_*
 chmod 600 .env
@@ -336,8 +371,8 @@ git checkout v1.0.0 && docker compose up -d --build  # ย้อนเวอร�
 
 ### ถ้าอยากให้ CI build image (ภายหลัง)
 ```bash
-cp ci/gitlab-ci.build-image.yml.sample .gitlab-ci.yml
-# + เปิด Container Registry ของโปรเจกต์ แล้วแก้ docker-compose ให้ใช้ image: $CI_REGISTRY_IMAGE:vX.Y.Z
+cp ci/github-workflow-build.yml.sample .github/workflows/build-image.yml
+# + แก้ docker-compose ให้ใช้ image: ghcr.io/<org>/notify-line:vX.Y.Z
 ```
 
 ---

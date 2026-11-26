@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: syntax (node + shell + json)
+        run: |
+          node --check quota-alert-line.js
+          sh -n entrypoint.sh
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"
+
+      - name: logic selftest (level / dedupe / quota change / message)
+        run: node quota-alert-line.js --selftest
+
+      - name: message preview (must render without credentials)
+        run: node quota-alert-line.js --preview > /dev/null
+
+      - name: guard - no secret files tracked
+        run: |
+          set -e
+          for f in .env token-store.json state.json data; do
+            if git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+              echo "::error::$f must not be tracked"
+              exit 1
+            fi
+          done
+          echo "ok: no secret files tracked"
