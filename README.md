@@ -323,14 +323,14 @@ Host github.com-hicrew-notify
 ```
 
 ```bash
-git clone git@github.com-hicrew-notify:nattakit2023/hicrew-notify.git /opt/quota-alert
+git clone -b dev git@github.com-hicrew-notify:nattakit2023/hicrew-notify.git /opt/quota-alert
 ```
 
 > GitHub Actions: ไฟล์ `.github/workflows/ci.yml` จะรัน `--selftest` ให้อัตโนมัติทุก push (ไม่ต้องตั้ง secret ใด ๆ)
 
 ### ครั้งแรก: บน server
 ```bash
-git clone https://github.com/nattakit2023/hicrew-notify.git /opt/quota-alert
+git clone -b dev https://github.com/nattakit2023/hicrew-notify.git /opt/quota-alert
 cd /opt/quota-alert
 cp .env.example .env && vi .env         # API_BASE_URL / LOGTO_* / LINE_*
 chmod 600 .env
