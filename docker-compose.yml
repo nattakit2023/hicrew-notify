@@ -1,7 +1,7 @@
 services:
   quota-alert:
     build: .
-    container_name: quota-alert
+    container_name: hicrew-notify
     restart: unless-stopped         # ตาย/รีบูตเครื่อง -> ขึ้นเอง
     env_file: .env
     environment:

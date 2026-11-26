@@ -1,8 +1,8 @@
 {
-  "name": "quota-alert",
+  "name": "hicrew-notify",
   "version": "1.0.0",
   "private": true,
-  "description": "แจ้งเตือนโควตาข้อมูล PIN เข้า LINE ทุกชั่วโมง (อ่านข้อมูลผ่าน report API)",
+  "description": "แจ้งเตือนโควตาข้อมูล PIN เข้า LINE ทุกชั่วโมง (hicrew-notify)",
   "main": "quota-alert-line.js",
   "scripts": {
     "start": "node quota-alert-line.js",
@@ -14,7 +14,9 @@
     "whoami": "node quota-alert-line.js --whoami",
     "register-report": "node quota-alert-line.js --register-report"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "pg": "^8.23.1"
   }

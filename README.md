@@ -283,7 +283,7 @@ git init -b main
 git add -A
 git status --short           # ต้องไม่เห็น .env / token-store.json / state.json / node_modules
 git commit -m "feat: hourly PIN quota alert to LINE"
-git remote add origin https://github.com/<your-org>/notify-line.git
+git remote add origin https://github.com/nattakit2023/hicrew-notify.git
 git tag -a v1.0.0 -m "v1.0.0 — initial"
 git push -u origin main --tags
 ```
@@ -297,7 +297,7 @@ git check-ignore -v .env token-store.json state.json node_modules
 
 ```bash
 # เปลี่ยน remote จาก GitLab -> GitHub
-git remote set-url origin https://github.com/<your-org>/notify-line.git
+git remote set-url origin https://github.com/nattakit2023/hicrew-notify.git
 
 # push (ครั้งแรกต้องมีสิทธิ์สร้าง repo หรือให้ org สร้างให้)
 git push -u origin main
@@ -308,29 +308,29 @@ git push origin v1.0.0
 
 ```bash
 # บน server
-ssh-keygen -t ed25519 -C "quota-alert deploy" -f ~/.ssh/quota_alert_deploy -N ""
-cat ~/.ssh/quota_alert_deploy.pub
+ssh-keygen -t ed25519 -C "hicrew-notify deploy" -f ~/.ssh/hicrew_notify_deploy -N ""
+cat ~/.ssh/hicrew_notify_deploy.pub
 # เอา public key ไปใส่: GitHub repo -> Settings -> Deploy keys -> Add (ไม่ต้องติ๊ก write)
 ```
 
 `~/.ssh/config` บน server:
 ```
-Host github.com-quota-alert
+Host github.com-hicrew-notify
   HostName github.com
   User git
-  IdentityFile ~/.ssh/quota_alert_deploy
+  IdentityFile ~/.ssh/hicrew_notify_deploy
   IdentitiesOnly yes
 ```
 
 ```bash
-git clone git@github.com-quota-alert:<your-org>/notify-line.git /opt/quota-alert
+git clone git@github.com-hicrew-notify:nattakit2023/hicrew-notify.git /opt/quota-alert
 ```
 
 > GitHub Actions: ไฟล์ `.github/workflows/ci.yml` จะรัน `--selftest` ให้อัตโนมัติทุก push (ไม่ต้องตั้ง secret ใด ๆ)
 
 ### ครั้งแรก: บน server
 ```bash
-git clone https://github.com/<your-org>/notify-line.git /opt/quota-alert
+git clone https://github.com/nattakit2023/hicrew-notify.git /opt/quota-alert
 cd /opt/quota-alert
 cp .env.example .env && vi .env         # API_BASE_URL / LOGTO_* / LINE_*
 chmod 600 .env
@@ -354,9 +354,9 @@ docker compose logs -f --tail 30
 | รอบล่าสุด **exit 0** | สคริปต์ไม่ได้ error |
 
 ```bash
-docker ps --filter name=quota-alert          # ดูคอลัมน์ STATUS (healthy / unhealthy)
-docker inspect --format '{{.State.Health.Status}}' quota-alert
-docker inspect --format '{{json .State.Health.Log}}' quota-alert | tail -3
+docker ps --filter name=hicrew-notify          # ดูคอลัมน์ STATUS (healthy / unhealthy)
+docker inspect --format '{{.State.Health.Status}}' hicrew-notify
+docker inspect --format '{{json .State.Health.Log}}' hicrew-notify | tail -3
 cat data/heartbeat                           # <epoch> <exit code>
 ```
 
@@ -372,7 +372,7 @@ git checkout v1.0.0 && docker compose up -d --build  # ย้อนเวอร�
 ### ถ้าอยากให้ CI build image (ภายหลัง)
 ```bash
 cp ci/github-workflow-build.yml.sample .github/workflows/build-image.yml
-# + แก้ docker-compose ให้ใช้ image: ghcr.io/<org>/notify-line:vX.Y.Z
+# + แก้ docker-compose ให้ใช้ image: ghcr.io/nattakit2023/hicrew-notify:vX.Y.Z
 ```
 
 ---
