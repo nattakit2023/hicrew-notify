@@ -358,6 +358,56 @@ cp ci/gitlab-ci.build-image.yml.sample .gitlab-ci.yml
 
 ---
 
+## ทดสอบกับ Production อย่างปลอดภัย
+
+### 0) เช็คก่อนว่า Prod API มี report engine ไหม
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://<prod-api-host>/admin/reports/catalog
+```
+| ผล | ความหมาย |
+|---|---|
+| **401** | มี route อยู่ — ไปต่อได้ |
+| **404** | Prod API รุ่นเก่า ยังไม่มี report engine → ต้องอัปเดต backend ก่อน |
+
+### 1) เตรียมไฟล์แยกจาก staging
+```bash
+cp .env.prod.example .env.prod
+vi .env.prod        # API_BASE_URL (prod), LOGTO_CLIENT_ID, LINE_GROUP_ID, DRY_RUN=1
+chmod 600 .env.prod
+```
+> `.env.prod` ถูก ignore แล้ว · `STATE_FILE` แยกไฟล์ → dedupe ของ prod ไม่ปนกับ staging
+
+### 2) ลงทะเบียน report ใน Prod DB (ครั้งเดียว)
+```bash
+psql "$PROD_DATABASE_URL" -f register-report.sql
+# หรือ: ENV_FILE=.env.prod DATABASE_URL=... node quota-alert-line.js --register-report
+```
+
+### 3) ทดสอบแบบไม่ส่งอะไร
+```bash
+ENV_FILE=.env.prod node quota-alert-line.js --whoami
+ENV_FILE=.env.prod node quota-alert-line.js --check        # DRY_RUN=1 อยู่ใน .env.prod
+```
+
+### 4) ดูข้อความที่จะส่งจริง แล้วค่อยเลือก
+```bash
+ENV_FILE=.env.prod node quota-alert-line.js                # DRY_RUN=1 -> พิมพ์อย่างเดียว
+# ถ้าโอเค: เอา DRY_RUN=0 ใน .env.prod หรือ override ชั่วคราว
+ENV_FILE=.env.prod DRY_RUN=0 node quota-alert-line.js --test-line
+```
+
+### ข้อควรระวังกับ Prod
+
+| เรื่อง | ทำไม |
+|---|---|
+| ใช้ token ของ user ที่มีสิทธิ์แค่ `reports:read` | ลดความเสียหายถ้า token หลุด |
+| **LINE: ใช้กลุ่มทดสอบก่อน** | รอบแรกอาจมี PIN ≥70% หลายสิบรายการ → จะส่งเข้ากลุ่มจริงทันที |
+| `DRY_RUN=1` ก่อนเสมอ | ไม่ส่งข้อความ **และไม่เขียน state** → รันซ้ำได้ไม่จำกัด |
+| `STATE_FILE` แยกไฟล์ | ถ้าใช้ไฟล์เดียวกับ staging PIN จะถูกนับว่า "แจ้งแล้ว" ผิดรอบ |
+| ตรวจภาระ DB | รายงานเป็น SELECT เดียว/ชั่วโมง — ถ้า PIN เยอะมาก ให้ดู plan/explain ก่อน
+
+---
+
 ## รัน 24/7 — เลือกเครื่องที่เปิดตลอด
 
 | ทาง | เหมาะกับ | ข้อดี | ข้อเสีย |

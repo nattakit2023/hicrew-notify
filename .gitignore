@@ -16,3 +16,7 @@ token-store.json.tmp
 token-store-temp.json
 *.tmp
 data/
+.env.prod
+state.prod.json
+token-store.prod.json
+.quota-alert.prod.lock

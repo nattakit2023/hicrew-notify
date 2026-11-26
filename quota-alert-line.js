@@ -56,11 +56,15 @@ function loadDotEnv(file) {
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
     let value = line.slice(eq + 1).trim();
-    if (
+    const quoted =
       (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
+      (value.startsWith("'") && value.endsWith("'"));
+    if (quoted) {
       value = value.slice(1, -1);
+    } else {
+      // ตัด comment ท้ายบรรทัด (เช่น KEY=value   # คำอธิบาย)
+      // ทำเฉพาะค่าที่ไม่ได้ใส่เครื่องหมายคำพูด เพื่อไม่ตัด token ที่มี # อยู่ข้างใน
+      value = value.replace(/\s+#.*$/, '').trim();
     }
     if (!(key in process.env)) process.env[key] = value;
   }
