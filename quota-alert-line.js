@@ -82,6 +82,9 @@ const cfg = {
   reportName: env.REPORT_NAME || 'quota_alert.pins',
   pageSize: Math.min(Math.max(num(env.PAGE_SIZE, 500), 1), 500), // engine จำกัด 500
   nearPct: num(env.NEAR_PCT, 70),
+  // แจ้งเมื่อ "โควตาถูกเติม/เปลี่ยน" แม้ระดับใหม่จะต่ำกว่าเกณฑ์ (เปิดเป็นค่าเริ่มต้น)
+  // ปิดด้วย NOTIFY_QUOTA_CHANGE=0 (เช่น ช่วงต่ออายุรายเดือนที่เปลี่ยนโควตาทุก PIN)
+  notifyQuotaChange: !['0', 'false', 'no'].includes((env.NOTIFY_QUOTA_CHANGE || '1').toLowerCase()),
   auth: (env.AUTH || 'logto').toLowerCase(),
   accessToken: env.ACCESS_TOKEN || '',
   logto: {
@@ -470,12 +473,21 @@ function levelOf(row, nearPct = cfg.nearPct) {
 
 /**
  * เทียบกับ state เดิม -> รายการที่ต้องแจ้ง + state ใหม่
- * แจ้งเฉพาะเมื่อระดับสูงขึ้น; ระดับลดลง = รีเซ็ตเงียบ ๆ; PIN หายไป = ลบจาก state
+ *
+ * กติกา:
+ *  - ระดับสูงขึ้น (ok→near, near→full)                 -> แจ้ง
+ *  - ระดับเท่าเดิม                                     -> เงียบ
+ *  - **quota เปลี่ยน (เติม/ลด) -> เริ่มรอบใหม่**        -> แจ้งตามระดับใหม่ (near/full)
+ *  - ระดับลดลงอย่างเดียว (ใช้ยอดรีเซ็ต)                -> เงียบ
+ *  - PIN หายจากรายการ                                  -> ลบออกจาก state
+ *
+ * ต้องเก็บ `quota_bytes` ใน state ด้วย ไม่งั้นแยก "เติมโควตา" ออกจาก "ระดับลด" ไม่ได้
  */
 function plan(rows, prevState, nearPct = cfg.nearPct) {
   const prevPins = (prevState && prevState.pins) || {};
   const next = { version: 1, updated_at: new Date().toISOString(), pins: {} };
   const transitions = [];
+  const quotaChanges = [];
 
   for (const row of rows) {
     const pin = String(row.pin_code ?? '');
@@ -484,15 +496,32 @@ function plan(rows, prevState, nearPct = cfg.nearPct) {
     const level = levelOf(row, nearPct);
     if (!level) continue; // ไม่มีโควตา คิด % ไม่ได้ -> ข้าม
 
-    const before = (prevPins[pin] && prevPins[pin].level) || 'ok';
-    next.pins[pin] = { level, at: new Date().toISOString() };
+    const prev = prevPins[pin] || null;
+    const prevLevel = (prev && prev.level) || 'ok';
+    const quota = Number(row.quota_bytes || 0);
+    const prevQuota = prev && prev.quota_bytes != null ? Number(prev.quota_bytes) : null;
 
-    if (RANK[level] > RANK[before]) {
-      transitions.push({ row, level, before });
+    // เติม/เปลี่ยนโควตา = เริ่มรอบใหม่ (เทียบจาก ok) — state เก่าที่ไม่มี quota_bytes ถือว่าไม่เปลี่ยน
+    const quotaChanged = prevQuota !== null && prevQuota !== quota;
+    const base = quotaChanged ? 'ok' : prevLevel;
+
+    next.pins[pin] = { level, quota_bytes: quota, at: new Date().toISOString() };
+
+    if (quotaChanged) {
+      quotaChanges.push({ row, level, prevQuota, quota });
+    }
+
+    if (RANK[level] > RANK[base]) {
+      transitions.push({
+        row,
+        level,
+        before: base,
+        reason: quotaChanged ? 'quota_changed' : 'level_up',
+      });
     }
   }
 
-  return { transitions, next };
+  return { transitions, quotaChanges, next };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -529,8 +558,9 @@ function lineFor(entry) {
   return `  ${icon} ${parts.join(' · ')}`;
 }
 
-function buildMessage(transitions, now = new Date()) {
-  if (transitions.length === 0) return null;
+function buildMessage(transitions, now = new Date(), quotaChanges = []) {
+  const showChanges = cfg.notifyQuotaChange && quotaChanges.length > 0;
+  if (transitions.length === 0 && !showChanges) return null;
 
   // 1) จัดกลุ่มตามเรือ
   const groups = new Map();
@@ -567,7 +597,22 @@ function buildMessage(transitions, now = new Date()) {
     for (const entry of group.items) lines.push(lineFor(entry));
   }
 
-  lines.push('', `รวม 🔴 หมดแล้ว ${fullCount} · 🟠 ใกล้หมด ${nearCount} รายการ`);
+  if (transitions.length) {
+    lines.push('', `รวม 🔴 หมดแล้ว ${fullCount} · 🟠 ใกล้หมด ${nearCount} รายการ`);
+  }
+
+  if (showChanges) {
+    lines.push('', `♻️ ปรับโควตา ${quotaChanges.length} รายการ`);
+    for (const c of quotaChanges) {
+      const remark = remarkOf(c.row);
+      const head = [String(c.row.pin_code), remark].filter(Boolean).join(' · ');
+      lines.push(
+        `  • ${head} · ${gb(c.prevQuota)} → ${gb(c.quota)} GB` +
+          (c.level === 'ok' ? '' : ` (ตอนนี้ ${pct(c.row) === null ? '-' : pct(c.row).toFixed(1) + '%'})`),
+      );
+    }
+  }
+
   return lines.join('\n').trimEnd();
 }
 
@@ -697,10 +742,20 @@ async function main() {
     log(`ดึงข้อมูลได้ ${rows.length} PIN`);
 
     const prev = loadState();
-    const { transitions, next } = plan(rows, prev);
-    log(`ต้องแจ้ง ${transitions.length} รายการ (full ${transitions.filter((t) => t.level === 'full').length}, near ${transitions.filter((t) => t.level === 'near').length})`);
+    const { transitions, quotaChanges, next } = plan(rows, prev);
+    const byQuota = transitions.filter((t) => t.reason === 'quota_changed').length;
+    log(
+      `ต้องแจ้ง ${transitions.length} รายการ (full ${transitions.filter((t) => t.level === 'full').length}, ` +
+        `near ${transitions.filter((t) => t.level === 'near').length}` +
+        (byQuota ? `, จากการเปลี่ยนโควตา ${byQuota}` : '') +
+        ')',
+    );
 
-    const message = buildMessage(transitions);
+    if (quotaChanges.length) {
+      log(`ตรวจพบการเปลี่ยนโควตา ${quotaChanges.length} รายการ${cfg.notifyQuotaChange ? ' (จะแจ้ง)' : ' (ไม่แจ้ง — เปิดด้วย NOTIFY_QUOTA_CHANGE=1)'}`);
+    }
+
+    const message = buildMessage(transitions, new Date(), quotaChanges);
     if (message) {
       await pushLine(message);
     } else {
@@ -764,6 +819,37 @@ function selftest() {
   step = plan(again, step.next);
   assert.strictEqual(step.transitions.length, 1);
   assert.strictEqual(step.transitions[0].row.pin_code, 'P2');
+
+  // ── เคส "เติม/เปลี่ยนโควตา" = เริ่มรอบใหม่ ต้องแจ้งตามระดับใหม่ ──
+  const G = 1e9;
+  const pin = (quotaGb, usedGb) => ({ pin_code: 'P9', quota_bytes: quotaGb * G, used_bytes: usedGb * G });
+
+  // เดิม 1GB/1GB = full และเคยแจ้งแล้ว -> เติม +1GB (1GB/2GB = 50%)
+  let st = { version: 1, pins: { P9: { level: 'full', quota_bytes: 1 * G } } };
+  let after = plan([pin(2, 1)], st);
+  assert.strictEqual(after.transitions.length, 0, 'เติมแล้วระดับเป็น ok -> ไม่มีอะไรต้องแจ้ง');
+  assert.strictEqual(after.next.pins.P9.level, 'ok');
+  assert.strictEqual(after.next.pins.P9.quota_bytes, 2 * G, 'state ต้องจำ quota ใหม่');
+
+  // เติมนิดเดียว: 1GB/1.2GB = 83% -> ต้องแจ้ง near แม้ระดับเดิมเป็น full
+  after = plan([pin(1.2, 1)], { version: 1, pins: { P9: { level: 'full', quota_bytes: 1 * G } } });
+  assert.strictEqual(after.transitions.length, 1, 'เติมโควตาแล้วต้องแจ้งตามระดับใหม่');
+  assert.strictEqual(after.transitions[0].level, 'near');
+  assert.strictEqual(after.transitions[0].reason, 'quota_changed');
+
+  // เติมแล้วยังเต็ม (เช่น ลดโควตา/แก้ตัวเลข) -> ต้องแจ้ง full
+  after = plan([pin(0.5, 1)], { version: 1, pins: { P9: { level: 'full', quota_bytes: 1 * G } } });
+  assert.strictEqual(after.transitions.length, 1, 'โควตาลดจนเต็ม ต้องแจ้ง');
+  assert.strictEqual(after.transitions[0].level, 'full');
+
+  // โควตาเท่าเดิม + ระดับเท่าเดิม -> เงียบ (กันสแปมรายชั่วโมง)
+  const same = { version: 1, pins: { P9: { level: 'near', quota_bytes: 2 * G } } };
+  after = plan([pin(2, 1.5)], same);
+  assert.strictEqual(after.transitions.length, 0, 'โควตาไม่เปลี่ยนและระดับเดิม -> เงียบ');
+
+  // ใช้ยอดรีเซ็ต (quota เดิม) -> ระดับลดลง เงียบ
+  after = plan([pin(2, 0.2)], same);
+  assert.strictEqual(after.transitions.length, 0, 'ยอดรีเซ็ต -> เงียบ');
 
   // PIN หายจากรายการ -> ลบออกจาก state เงียบ ๆ
   step = plan([mk('P3', 10e9, 1e9)], step.next);
@@ -912,8 +998,11 @@ async function check() {
     for (const row of rows) levels[levelOf(row) || 'unknown'] += 1;
     console.log(`   ระดับ: 🔴 full ${levels.full} · 🟠 near ${levels.near} · 🟢 ok ${levels.ok} · ⚪ ไม่มีโควตา ${levels.unknown}`);
 
-    const { transitions } = plan(rows, loadState());
+    const { transitions, quotaChanges } = plan(rows, loadState());
     console.log(`   ถ้ารัน cron จริงตอนนี้ จะแจ้ง ${transitions.length} รายการ`);
+    if (quotaChanges.length) {
+      console.log(`   ตรวจพบการเปลี่ยนโควตา ${quotaChanges.length} รายการ${cfg.notifyQuotaChange ? ' (จะแสดงในข้อความ)' : ' (ไม่แสดง — NOTIFY_QUOTA_CHANGE=1 เพื่อเปิด)'}`);
+    }
     if (transitions.length) {
       console.log('\n── ข้อความที่จะส่ง ─────────────────────────────');
       console.log(buildMessage(transitions));
