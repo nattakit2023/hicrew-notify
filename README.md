@@ -363,6 +363,34 @@ cat data/heartbeat                           # <epoch> <exit code>
 > ⚠️ `healthcheck` แค่ **รายงานสถานะ** ไม่ได้ restart ให้ — ถ้าอยากให้ restart อัตโนมัติเมื่อ unhealthy
 > ใช้ container `willfarrell/autoheal` หรือปล่อยให้ cron/systemd ภายนอกเป็นตัวเฝ้า
 
+### deploy ด้วยสคริปต์เดียว (แนะนำ)
+
+บน server (หลัง clone + ตั้ง `.env.prod` แล้ว):
+
+```bash
+chmod +x deploy.sh
+./deploy.sh                    # ใช้ .env.prod + branch dev
+./deploy.sh --check-only       # ตรวจอย่างเดียว ไม่ build/ไม่ restart
+./deploy.sh --no-pull          # build จากโค้ดเดิม
+BRANCH=develop ./deploy.sh     # เปลี่ยน branch
+ENV_FILE=.env ./deploy.sh      # ใช้ไฟล์ env อื่น
+```
+
+สิ่งที่สคริปต์ทำให้ (ตรวจ env → `git pull --ff-only` → `node --check`/`--selftest` → `build` → `up -d` → สถานะ → `--check`)
+
+**ลำดับที่ถูกต้องสำหรับครั้งแรก** (build → seed token → up):
+```bash
+cp .env.prod.example .env.prod && vi .env.prod && chmod 600 .env.prod
+mkdir -p data
+docker compose --env-file .env.prod build                          # 1) สร้าง image
+
+docker compose --env-file .env.prod run --rm --entrypoint node quota-alert \
+  /app/quota-alert-line.js --set-refresh-token '<refresh_token>'    # 2) seed token
+
+./deploy.sh --no-pull                                               # 3) up -d + --check
+```
+> ถ้า `up -d` ก่อน seed token: รอบแรกจะล้มเหลว (heartbeat exit=1 -> unhealthy) จนกว่าจะ seed เสร็จ
+
 ### 6) อัปเดต / rollback
 ```bash
 git pull && docker compose up -d --build             # อัปเดต
