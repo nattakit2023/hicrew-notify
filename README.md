@@ -408,6 +408,63 @@ ENV_FILE=.env.prod DRY_RUN=0 node quota-alert-line.js --test-line
 
 ---
 
+## ถ้าเครื่อง Prod ต้องต่อ Tunnel
+
+### ทางที่ดีที่สุด: รันงานบนเครื่อง Prod เอง (ไม่ต้อง tunnel สำหรับตัวงาน)
+
+คอนเทนเนอร์บน prod server คุย API/DB ภายในได้เลย — tunnel ใช้เฉพาะตอนคุณเข้าไปสั่งงาน
+
+```bash
+ssh user@prod
+cd /opt/quota-alert && ENV_FILE=.env.prod node quota-alert-line.js --check
+```
+
+> ในกรณีนี้ `API_BASE_URL` ใช้ชื่อภายใน (เช่น `https://api.internal`) — **ไม่ต้องผ่าน tunnel**
+
+### ทางที่ 2: ทดสอบจากโน้ตบุ๊กผ่าน SSH local port-forward
+
+ต้องเปิด 2 ช่อง: **API** (ใช้ทุกชั่วโมง) และ **DB** (ใช้ครั้งเดียวตอนลงทะเบียน report)
+
+**Linux / macOS**
+```bash
+ssh -N -L 8443:prod-api.internal:443 -L 15432:prod-db:5432 user@bastion
+# เพิ่มใน /etc/hosts:  127.0.0.1 prod-api.internal
+```
+
+**Windows (PowerShell)**
+```powershell
+ssh -N -L 8443:prod-api.internal:443 -L 15432:prod-db:5432 user@bastion
+# แก้ C:\Windows\System32\drivers\etc\hosts (Run as Administrator)
+#   127.0.0.1 prod-api.internal
+```
+
+`.env.prod`
+```env
+API_BASE_URL=https://prod-api.internal:8443
+```
+
+```bash
+ENV_FILE=.env.prod node quota-alert-line.js --check
+psql "postgres://user:pass@127.0.0.1:15432/dbname" -f register-report.sql
+```
+
+**ทำไมต้องใช้ hosts file** — เพื่อให้ชื่อใน certificate (SNI) ตรงกับ cert จริง → **ไม่ต้องปิดการตรวจ TLS**
+
+| ห้าม | เพราะ |
+|---|---|
+| `NODE_TLS_REJECT_UNAUTHORIZED=0` | ปิดการตรวจ cert ทั้งโปรเซส → เสี่ยงถูกดักกลางทาง |
+| ใส่ `IP` แทนชื่อใน `API_BASE_URL` | cert จะไม่ตรงชื่อ → ต้องปิด TLS |
+
+### ตรวจก่อนว่าเครื่องที่จะรัน ออกเน็ตไป LINE ได้
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' \
+  -H "Authorization: Bearer $LINE_CHANNEL_TOKEN" https://api.line.me/v2/bot/info
+```
+`200` = token ใช้ได้และออกเน็ตได้ · `401` = token ผิด · ค้าง/ไม่ตอบ = firewall บล็อกออก
+
+---
+
 ## รัน 24/7 — เลือกเครื่องที่เปิดตลอด
 
 | ทาง | เหมาะกับ | ข้อดี | ข้อเสีย |
