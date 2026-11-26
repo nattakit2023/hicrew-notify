@@ -15,4 +15,11 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh && mkdir -p /app/data
 
 VOLUME ["/app/data"]
+
+# healthcheck: heartbeat (/app/data/heartbeat = "<epoch> <exit code>")
+#   - ต้องมีรอบล่าสุดภายใน 90 นาที
+#   - และรอบล่าสุดต้อง exit 0
+HEALTHCHECK --interval=5m --timeout=10s --start-period=15m --retries=3 \
+  CMD sh -c 'read ts code < /app/data/heartbeat && now=$(date +%s) && [ $((now-ts)) -lt 5400 ] && [ "$code" = "0" ]'
+
 CMD ["/entrypoint.sh"]

@@ -8,7 +8,15 @@ services:
       STATE_FILE: /app/data/state.json
       REFRESH_TOKEN_FILE: /app/data/token-store.json
     volumes:
-      - ./data:/app/data            # state + token + log อยู่ในนี้ (ต้อง persist)
+      - ./data:/app/data            # state + token + log + heartbeat (ต้อง persist)
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - read ts code < /app/data/heartbeat && now=$$(date +%s) && [ $$((now-ts)) -lt 5400 ] && [ "$$code" = "0" ]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 15m
     logging:
       driver: json-file
       options: { max-size: "5m", max-file: "2" }

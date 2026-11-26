@@ -291,7 +291,27 @@ docker compose run --rm --entrypoint node quota-alert /app/quota-alert-line.js -
 docker compose logs -f --tail 30
 ```
 
-### อัปเดต / rollback
+### 5) ตรวจสุขภาพคอนเทนเนอร์ (healthcheck)
+
+คอนเทนเนอร์เขียน `data/heartbeat` ทุกครั้งที่จบรอบ (`<epoch> <exit code>`)
+แล้ว healthcheck จะตอบ **healthy** เมื่อ:
+
+| เงื่อนไข | ความหมาย |
+|---|---|
+| รอบล่าสุด **ภายใน 90 นาที** | ลูปไม่ตาย/ไม่ค้าง |
+| รอบล่าสุด **exit 0** | สคริปต์ไม่ได้ error |
+
+```bash
+docker ps --filter name=quota-alert          # ดูคอลัมน์ STATUS (healthy / unhealthy)
+docker inspect --format '{{.State.Health.Status}}' quota-alert
+docker inspect --format '{{json .State.Health.Log}}' quota-alert | tail -3
+cat data/heartbeat                           # <epoch> <exit code>
+```
+
+> ⚠️ `healthcheck` แค่ **รายงานสถานะ** ไม่ได้ restart ให้ — ถ้าอยากให้ restart อัตโนมัติเมื่อ unhealthy
+> ใช้ container `willfarrell/autoheal` หรือปล่อยให้ cron/systemd ภายนอกเป็นตัวเฝ้า
+
+### 6) อัปเดต / rollback
 ```bash
 git pull && docker compose up -d --build             # อัปเดต
 git checkout v1.0.0 && docker compose up -d --build  # ย้อนเวอร์ชัน
